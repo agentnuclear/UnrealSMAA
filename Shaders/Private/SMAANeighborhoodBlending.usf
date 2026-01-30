@@ -1,0 +1,136 @@
+// SMAANeighborhoodBlending.usf
+#include "/Engine/Private/Common.ush"
+#include "/Engine/Private/ScreenPass.ush"
+
+Texture2D ColorTexture;
+SamplerState ColorSampler;
+
+Texture2D BlendTexture;
+SamplerState BlendSampler;
+
+float2 InvTextureSize;
+uint DebugMode;
+
+void MainPS(
+    noperspective float4 UVAndScreenPos : TEXCOORD0,
+    float4 SvPosition : SV_POSITION,
+    out float4 OutColor : SV_Target0
+)
+{
+    float2 UV = UVAndScreenPos.xy;
+
+    float3 Color = ColorTexture.SampleLevel(ColorSampler, UV, 0).rgb;
+    float4 Blend = BlendTexture.SampleLevel(BlendSampler, UV, 0);
+
+    // Debug visualization modes
+    if (DebugMode == 1)
+    {
+        OutColor = float4(Blend.rg, 0, 1);
+        return;
+    }
+    
+    if (DebugMode == 2)
+    {
+        OutColor = float4(Blend.rgb, 1);
+        return;
+    }
+    
+    if (DebugMode == 3)
+    {
+        OutColor = float4(Color * 0.5 + Blend.rgb * 0.5, 1);
+        return;
+    }
+
+    // Calculate total blend amount
+    float blendAmount = dot(Blend, float4(1, 1, 1, 1));
+    
+    // If no blending needed, return original color
+    if (blendAmount < 0.001)
+    {
+        OutColor = float4(Color, 1);
+        return;
+    }
+    
+    // Sample orthogonal neighbors
+    float3 ColorLeft  = ColorTexture.SampleLevel(ColorSampler, UV + float2(-InvTextureSize.x, 0), 0).rgb;
+    float3 ColorTop   = ColorTexture.SampleLevel(ColorSampler, UV + float2(0, -InvTextureSize.y), 0).rgb;
+    float3 ColorRight = ColorTexture.SampleLevel(ColorSampler, UV + float2( InvTextureSize.x, 0), 0).rgb;
+    float3 ColorBot   = ColorTexture.SampleLevel(ColorSampler, UV + float2(0,  InvTextureSize.y), 0).rgb;
+    
+    // Sample diagonal neighbors for better diagonal edge handling
+    float3 ColorTL = ColorTexture.SampleLevel(ColorSampler, UV + float2(-InvTextureSize.x, -InvTextureSize.y), 0).rgb;
+    float3 ColorTR = ColorTexture.SampleLevel(ColorSampler, UV + float2( InvTextureSize.x, -InvTextureSize.y), 0).rgb;
+    float3 ColorBL = ColorTexture.SampleLevel(ColorSampler, UV + float2(-InvTextureSize.x,  InvTextureSize.y), 0).rgb;
+    float3 ColorBR = ColorTexture.SampleLevel(ColorSampler, UV + float2( InvTextureSize.x,  InvTextureSize.y), 0).rgb;
+    
+    // Accumulate blended color
+    float3 BlendedColor = float3(0, 0, 0);
+    float totalUsed = 0.0;
+    
+    // Add orthogonal contributions
+    if (Blend.r > 0.001)
+    {
+        BlendedColor += ColorLeft * Blend.r;
+        totalUsed += Blend.r;
+    }
+    if (Blend.g > 0.001)
+    {
+        BlendedColor += ColorTop * Blend.g;
+        totalUsed += Blend.g;
+    }
+    if (Blend.b > 0.001)
+    {
+        BlendedColor += ColorRight * Blend.b;
+        totalUsed += Blend.b;
+    }
+    if (Blend.a > 0.001)
+    {
+        BlendedColor += ColorBot * Blend.a;
+        totalUsed += Blend.a;
+    }
+    
+    // Add diagonal contributions when both directions have weights
+    float diagonalWeight = 0.0;
+    
+    if (Blend.r > 0.001 && Blend.g > 0.001)
+    {
+        diagonalWeight = min(Blend.r, Blend.g) * 0.5;
+        BlendedColor += ColorTL * diagonalWeight;
+        totalUsed += diagonalWeight;
+    }
+    
+    if (Blend.b > 0.001 && Blend.g > 0.001)
+    {
+        diagonalWeight = min(Blend.b, Blend.g) * 0.5;
+        BlendedColor += ColorTR * diagonalWeight;
+        totalUsed += diagonalWeight;
+    }
+    
+    if (Blend.r > 0.001 && Blend.a > 0.001)
+    {
+        diagonalWeight = min(Blend.r, Blend.a) * 0.5;
+        BlendedColor += ColorBL * diagonalWeight;
+        totalUsed += diagonalWeight;
+    }
+    
+    if (Blend.b > 0.001 && Blend.a > 0.001)
+    {
+        diagonalWeight = min(Blend.b, Blend.a) * 0.5;
+        BlendedColor += ColorBR * diagonalWeight;
+        totalUsed += diagonalWeight;
+    }
+    
+    // Normalize and blend with original
+    if (totalUsed > 0.001)
+    {
+        BlendedColor = BlendedColor / totalUsed;
+        float blendFactor = min(totalUsed, 1.0);
+        BlendedColor = lerp(Color, BlendedColor, blendFactor);
+    }
+    else
+    {
+        BlendedColor = Color;
+    }
+    
+    OutColor = float4(BlendedColor, 1);
+}

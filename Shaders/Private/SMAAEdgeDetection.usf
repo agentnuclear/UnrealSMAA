@@ -1,0 +1,61 @@
+// SMAAEdgeDetection.usf
+#include "/Engine/Private/Common.ush"
+#include "/Engine/Private/ScreenPass.ush"
+
+Texture2D ColorTexture;
+SamplerState ColorSampler;
+
+float2 InvTextureSize;
+float Threshold;
+uint DebugMode;
+
+void MainPS(
+    noperspective float4 UVAndScreenPos : TEXCOORD0,
+    float4 SvPosition : SV_POSITION,
+    out float4 OutColor : SV_Target0
+)
+{
+    float2 UV = UVAndScreenPos.xy;
+
+    // Sample center and neighbors
+    float3 C  = ColorTexture.SampleLevel(ColorSampler, UV, 0).rgb;
+    float3 L  = ColorTexture.SampleLevel(ColorSampler, UV + float2(-InvTextureSize.x, 0), 0).rgb;
+    float3 T  = ColorTexture.SampleLevel(ColorSampler, UV + float2(0, -InvTextureSize.y), 0).rgb;
+    float3 R  = ColorTexture.SampleLevel(ColorSampler, UV + float2(InvTextureSize.x, 0), 0).rgb;
+    float3 B  = ColorTexture.SampleLevel(ColorSampler, UV + float2(0, InvTextureSize.y), 0).rgb;
+
+    // Convert to luma
+    float LC = dot(C, float3(0.299, 0.587, 0.114));
+    float LL = dot(L, float3(0.299, 0.587, 0.114));
+    float LT = dot(T, float3(0.299, 0.587, 0.114));
+    float LR = dot(R, float3(0.299, 0.587, 0.114));
+    float LB = dot(B, float3(0.299, 0.587, 0.114));
+
+    // Detect edges in both directions
+    float EdgeH = max(abs(LC - LL), abs(LC - LR));
+    float EdgeV = max(abs(LC - LT), abs(LC - LB));
+
+    float adaptiveThreshold = Threshold;
+
+    // Boost detection in high-contrast areas
+    float contrast = max(max(abs(LC - LL), abs(LC - LT)), max(abs(LC - LR), abs(LC - LB)));
+    if (contrast > 0.3)
+    {
+        adaptiveThreshold *= 0.5; // More sensitive in high-contrast areas
+    }
+
+    // Threshold to binary edge
+    float H = EdgeH > Threshold ? 1.0 : 0.0;
+    float V = EdgeV > Threshold ? 1.0 : 0.0;
+
+    // DEBUG: visualize edges clearly
+    if (DebugMode == 1)
+    {
+        // Horizontal = RED, Vertical = GREEN
+        OutColor = float4(H, V, 0, 1);
+        return;
+    }
+
+    // Normal SMAA edge output (RG)
+    OutColor = float4(H, V, 0, 0);
+}

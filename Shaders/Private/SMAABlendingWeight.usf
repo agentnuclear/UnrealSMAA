@@ -1,0 +1,202 @@
+#include "/Engine/Private/Common.ush"
+#include "/Engine/Private/ScreenPass.ush"
+
+Texture2D EdgeTexture;
+SamplerState EdgeSampler;
+Texture2D AreaTexture;
+SamplerState AreaSampler;
+Texture2D SearchTexture;
+SamplerState SearchSampler;
+
+float2 InvTextureSize;
+int MaxSearchSteps;
+uint bUseCornerDetection;
+uint bUseDiagonalDetection;
+uint DebugMode;
+
+// SMAA Constants
+#define SMAA_AREATEX_MAX_DISTANCE 16
+#define SMAA_AREATEX_SIZE float2(160.0, 560.0)
+#define SMAA_AREATEX_SUBTEX_SIZE (1.0 / 7.0)
+
+// Search for edge patterns
+float2 SMAASearchXLeft(float2 texcoord, float end)
+{
+    float2 e = float2(0.0, 1.0);
+    
+    for (int i = 0; i < MaxSearchSteps; i++)
+    {
+        e = EdgeTexture.SampleLevel(EdgeSampler, texcoord, 0).rg;
+        texcoord -= float2(InvTextureSize.x * 2.0, 0.0);
+        
+        if (!(texcoord.x > end && e.g > 0.8281 && e.r == 0.0))
+            break;
+    }
+    
+    return float2(max(texcoord.x, end), e.g);
+}
+
+float2 SMAASearchXRight(float2 texcoord, float end)
+{
+    float2 e = float2(0.0, 1.0);
+    
+    for (int i = 0; i < MaxSearchSteps; i++)
+    {
+        e = EdgeTexture.SampleLevel(EdgeSampler, texcoord, 0).rg;
+        texcoord += float2(InvTextureSize.x * 2.0, 0.0);
+        
+        if (!(texcoord.x < end && e.g > 0.8281 && e.r == 0.0))
+            break;
+    }
+    
+    return float2(min(texcoord.x, end), e.g);
+}
+
+float2 SMAASearchYUp(float2 texcoord, float end)
+{
+    float2 e = float2(1.0, 0.0);
+    
+    for (int i = 0; i < MaxSearchSteps; i++)
+    {
+        e = EdgeTexture.SampleLevel(EdgeSampler, texcoord, 0).rg;
+        texcoord -= float2(0.0, InvTextureSize.y * 2.0);
+        
+        if (!(texcoord.y > end && e.r > 0.8281 && e.g == 0.0))
+            break;
+    }
+    
+    return float2(e.r, max(texcoord.y, end));
+}
+
+float2 SMAASearchYDown(float2 texcoord, float end)
+{
+    float2 e = float2(1.0, 0.0);
+    
+    for (int i = 0; i < MaxSearchSteps; i++)
+    {
+        e = EdgeTexture.SampleLevel(EdgeSampler, texcoord, 0).rg;
+        texcoord += float2(0.0, InvTextureSize.y * 2.0);
+        
+        if (!(texcoord.y < end && e.r > 0.8281 && e.g == 0.0))
+            break;
+    }
+    
+    return float2(e.r, min(texcoord.y, end));
+}
+
+// Area texture lookup
+float2 SMAAAreaDiag(float2 dist, float2 e, float offset)
+{
+    float2 texcoord = float2(SMAA_AREATEX_MAX_DISTANCE, SMAA_AREATEX_MAX_DISTANCE) + dist;
+    texcoord = SMAA_AREATEX_SUBTEX_SIZE * texcoord;
+    texcoord.x += 0.5 * SMAA_AREATEX_SUBTEX_SIZE;
+    texcoord.y += SMAA_AREATEX_SUBTEX_SIZE * offset;
+    texcoord /= SMAA_AREATEX_SIZE;
+    
+    return AreaTexture.SampleLevel(AreaSampler, texcoord, 0).rg;
+}
+
+float2 SMAAArea(float2 dist, float e1, float e2, float offset)
+{
+    float2 texcoord = float2(SMAA_AREATEX_MAX_DISTANCE, SMAA_AREATEX_MAX_DISTANCE) + dist;
+    texcoord = SMAA_AREATEX_SUBTEX_SIZE * texcoord;
+    texcoord.y += SMAA_AREATEX_SUBTEX_SIZE * offset;
+    texcoord.y += 0.5 * SMAA_AREATEX_SUBTEX_SIZE;
+    texcoord /= SMAA_AREATEX_SIZE;
+    
+    return AreaTexture.SampleLevel(AreaSampler, texcoord, 0).rg;
+}
+
+void MainPS(
+    noperspective float4 UVAndScreenPos : TEXCOORD0,
+    float4 SvPosition : SV_POSITION,
+    out float4 OutColor : SV_Target0
+)
+{
+    float2 UV = UVAndScreenPos.xy;
+    float4 offset = float4(InvTextureSize.x, 0, 0, InvTextureSize.y);
+    
+    float2 Edges = EdgeTexture.SampleLevel(EdgeSampler, UV, 0).rg;
+    
+    if (DebugMode == 1)
+    {
+        OutColor = float4(Edges.r, Edges.g, 0, 1);
+        return;
+    }
+    
+    float4 Weights = float4(0, 0, 0, 0);
+    
+    if (dot(Edges, float2(1, 1)) < 0.01)
+    {
+        OutColor = Weights;
+        return;
+    }
+    
+    // ====== FULL SMAA ALGORITHM ======
+    
+    // Horizontal edges
+    if (Edges.g > 0.8)
+    {
+        // Search for edge boundaries
+        float2 d;
+        float3 coords;
+        
+        // Search left
+        coords.x = SMAASearchXLeft(UV - offset.xy, UV.x - 0.25).x;
+        d.x = coords.x;
+        
+        // Search right  
+        coords.y = SMAASearchXRight(UV + offset.xy, UV.x + 0.25).x;
+        d.y = coords.y;
+        
+        d = abs(d - UV.x);
+        
+        // Calculate pattern offset
+        float2 e = float2(Edges.g, Edges.r);
+        
+        // Lookup area
+        Weights.rg = SMAAArea(d, e.x, e.y, 0.0);
+        
+        // Boost weights for longer edges
+        float edgeLength = d.x + d.y;
+        float boost = saturate(edgeLength / 8.0);
+        Weights.rg *= (0.5 + boost * 0.5);
+    }
+    
+    // Vertical edges
+    if (Edges.r > 0.8)
+    {
+        // Search for edge boundaries
+        float2 d;
+        float3 coords;
+        
+        // Search up
+        coords.x = SMAASearchYUp(UV - offset.zy, UV.y - 0.25).y;
+        d.x = coords.x;
+        
+        // Search down
+        coords.y = SMAASearchYDown(UV + offset.zy, UV.y + 0.25).y;
+        d.y = coords.y;
+        
+        d = abs(d - UV.y);
+        
+        // Calculate pattern offset
+        float2 e = float2(Edges.r, Edges.g);
+        
+        // Lookup area
+        Weights.ba = SMAAArea(d, e.x, e.y, 0.0);
+        
+        // Boost weights for longer edges
+        float edgeLength = d.x + d.y;
+        float boost = saturate(edgeLength / 8.0);
+        Weights.ba *= (0.5 + boost * 0.5);
+    }
+    
+    if (DebugMode == 2)
+    {
+        OutColor = float4(Weights.rgb, 1);
+        return;
+    }
+    
+    OutColor = Weights;
+}
