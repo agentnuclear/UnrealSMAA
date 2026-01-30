@@ -15,7 +15,7 @@
 namespace SMAARendering
 {
 	//Forward decleration for indivisual passes
-	static FRDGTextureRef AddEdgeDetectionPass(FRDGBuilder& GraphBuilder, const FViewInfo& View, FRDGTextureRef SceneColor, const FSMAASettings& Settings);
+	static FRDGTextureRef AddEdgeDetectionPass(FRDGBuilder& GraphBuilder, const FViewInfo& View, FRDGTextureRef SceneColor, FRDGTextureRef SceneDepth, const FSMAASettings& Settings);
 	static FRDGTextureRef AddBlendingWeightPass(FRDGBuilder& GraphBuilder, const FViewInfo& View, FRDGTextureRef EdgeTexture, const FSMAASettings& Settings);
 	static FRDGTextureRef AddNeighborhoodBlendingPass(FRDGBuilder& GraphBuilder, const FViewInfo& View, FRDGTextureRef SceneColor, FRDGTextureRef BlendTexture, const FSMAASettings& Settings);
 
@@ -36,13 +36,14 @@ namespace SMAARendering
         return true;
 	}
 
-    FScreenPassTexture AddSMAAPasses(FRDGBuilder& GraphBuilder, const FViewInfo& View, const FScreenPassTexture& SceneColor, const FSMAASettings& Settings) {
+    FScreenPassTexture AddSMAAPasses(FRDGBuilder& GraphBuilder, const FViewInfo& View, const FScreenPassTexture& SceneColor, const FScreenPassTexture& SceneDepth, const FSMAASettings& Settings) {
         check(SceneColor.IsValid());
 
         RDG_EVENT_SCOPE(GraphBuilder, "SMAA");
 
         //Pass 1: Edge Detection
-        FRDGTextureRef EdgeTexture = AddEdgeDetectionPass(GraphBuilder, View, SceneColor.Texture, Settings);
+        FRDGTextureRef DepthTex = SceneDepth.IsValid() ? SceneDepth.Texture : SceneColor.Texture;
+        FRDGTextureRef EdgeTexture = AddEdgeDetectionPass(GraphBuilder, View, SceneColor.Texture, DepthTex, Settings);
 
         //Pass 2: Blending Weight Calculation
         FRDGTextureRef BlendWeightTexture = AddBlendingWeightPass(GraphBuilder,View,EdgeTexture,Settings);
@@ -53,7 +54,7 @@ namespace SMAARendering
         return FScreenPassTexture(OutputTexture, SceneColor.ViewRect);
     }
 
-    FRDGTextureRef AddEdgeDetectionPass(FRDGBuilder& GraphBuilder, const FViewInfo& View, FRDGTextureRef SceneColor, const FSMAASettings& Settings)
+    FRDGTextureRef AddEdgeDetectionPass(FRDGBuilder& GraphBuilder, const FViewInfo& View, FRDGTextureRef SceneColor, FRDGTextureRef SceneDepth, const FSMAASettings& Settings)
     {
         //Create edge texture(RG8)
         const FRDGTextureDesc EdgeDesc = FRDGTextureDesc::Create2D(SceneColor->Desc.Extent, PF_R8G8B8A8, FClearValueBinding::Black, TexCreate_ShaderResource | TexCreate_RenderTargetable);
@@ -64,7 +65,7 @@ namespace SMAARendering
         auto* PassParameters = GraphBuilder.AllocParameters<FSMAAEdgeDetectionPS::FParameters>();
         PassParameters->ColorTexture = SceneColor;
         PassParameters->ColorSampler = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp>::GetRHI();
-        PassParameters->DepthTexture = SceneColor; //using color for now , will add depth later
+        PassParameters->DepthTexture = SceneDepth; 
         PassParameters->DepthSampler = TStaticSamplerState<SF_Point, AM_Clamp, AM_Clamp>::GetRHI();
         PassParameters->InvTextureSize = FVector2f(1.0f / SceneColor->Desc.Extent.X, 1.0f / SceneColor->Desc.Extent.Y);
         PassParameters->Threshold = Settings.EdgeDetectionThreshold;
@@ -125,7 +126,7 @@ namespace SMAARendering
         PassParameters->AreaTexture = AreaTextureRDG;
         PassParameters->AreaSampler = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp>::GetRHI();
         PassParameters->SearchTexture = SearchTextureRDG;
-        PassParameters->SearchSampler = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp>::GetRHI();
+        PassParameters->SearchSampler = TStaticSamplerState<SF_Point, AM_Clamp, AM_Clamp>::GetRHI();
 
         PassParameters->InvTextureSize = FVector2f(
             1.0f / EdgeTexture->Desc.Extent.X,

@@ -9,8 +9,6 @@ A professional-grade SMAA (Subpixel Morphological Anti-Aliasing) implementation 
 3. Rebuild the project
 4. Enable the plugin in `Edit > Plugins` (search for "SMAA")
 
-[This Plugin is still in development and is not build friendly at the moment]
-
 ## Usage
 
 ### Basic Setup
@@ -101,7 +99,10 @@ r.SMAA.DebugMode 0
 - **None (0)**: Normal output
 - **Edges (1)**: Shows detected edges in red
 - **BlendWeights (2)**: Visualizes calculated blend weights
-- **FinalBlend (3)**: Shows final blended output
+- **SearchTexture (3)**: Displays the precomputed search texture
+- **AreaTexture (4)**: Displays the precomputed area texture
+- **SearchSteps (5)**: Visualizes search step patterns
+- **TextureDimensions (6)**: Shows texture dimension information
 
 Enable with: `r.SMAA.DebugMode 1`
 
@@ -113,7 +114,18 @@ Enable with: `r.SMAA.DebugMode 1`
 
 Requires **SM5 or higher** (DirectX 11+ equivalent)
 
-## Dependencies
+The plugin uses RDG (Render Dependency Graph) for efficient multi-pass rendering, ensuring compatibility with modern rendering backends.
+
+### Public Dependencies
+- **Core**: Base engine functionality
+- **CoreUObject**: Object system
+- **Engine**: Core engine systems
+
+### Private Dependencies
+- **RenderCore**: Shader compilation and RHI types
+- **Renderer**: FSceneViewExtension, RDG (Render Dependency Graph), PostProcess integration
+- **RHI**: RHI command lists and resources
+- **Projects**: Plugin manager for shader path mapping
 - Core, CoreUObject, Engine (public)
 - RenderCore, Renderer, RHI, Projects (private)
 
@@ -130,20 +142,78 @@ Requires **SM5 or higher** (DirectX 11+ equivalent)
 - Check console for initialization warnings
 
 ### Performance Issues
-- Reduce quality preset
-- Switch to Luma edge detection mode
-- Disable diagonal detection
-- Lower max search steps
-
-## Technical Details
-
-### Shader Implementation
-- **FSMAAEdgeDetectionPS**: Global pixel shader for edge detection
+  - Supports three detection modes via shader permutations
+  - Optimized for both single-pass and multi-pass rendering
+  - Includes optional debug visualization
+  
 - **FSMAABlendingWeightPS**: Global pixel shader for weight calculation
-- **Neighborhood Blending**: Uses built-in screen pass rendering
+  - Uses precomputed area and search textures for efficient pattern matching
+  - Configurable maximum search steps and corner detection
+  - Supports diagonal edge detection
+
+- **Neighborhood Blending**: Built-in screen pass rendering using calculated blend weights
 
 ### Integration Points
-- **FSceneViewExtension**: Post-rendering pipeline injection
+- **FSceneViewExtension**: Injects SMAA into post-processing pipeline via `SubscribeToPostProcessingPass()`
+- **RDG (Render Dependency Graph)**: Modern rendering graph integration for multi-pass rendering
+- **Console Variables**: Real-time configuration without recompilation
+- **Precomputed Textures**: Area and search textures stored in plugin content for efficient weight lookups
+
+### Module Loading and Initialization
+- **Loading Phase**: `PostConfigInit` - Ensures shader system is ready
+- **Startup Flow**: 
+  1. `StartupModule()`: Maps shader directory to virtual path `/Plugin/SMAA`
+  2. `OnPostEngineInit()`: Creates scene view extension and loads precomputed textures on game thread
+  3. `ShutdownModule()`: Cleanup and deregistration
+
+### Resource Management
+- **Precomputed Textures**: Area and search textures loaded from plugin content (T_SMAA_AreaTex, T_SMAA_SearchTex)
+- **Dynamic Textures**: Edge detection and blend weight textures created dynamically during rendering
+- **Thread Safety**: Scene view extension uses thread-safe shared pointers (ESPMode::ThreadSafe)
+
+## Advanced Settings
+
+### Fine-Tuning Edge Detection
+- **Threshold**: Controls edge sensitivity
+  - Lower values (0.05): Detect more edges, more blurring
+  - Higher values (0.15): Detect fewer edges, sharper but more aliasing
+  
+- **LocalContrastAdaptationFactor**: Adapts threshold to local image contrast
+  - Prevents over-blurring in high-contrast areas
+  - Typical range: 1.0 - 3.0
+
+### Maximum Search Steps
+- **Low (16)**: Faster, adequate for most edges
+- **Medium (32)**: Better pattern detection, recommended default
+- **High (32 + corners)**: Preserves corner sharpness
+- **Ultra (32 + corners + prediction)**: Maximum quality for distinctive edges
+
+## Performance Profiling
+
+The plugin integrates with Unreal's GPU profiling system. Use the following commands:
+
+```
+// Enable GPU profiling
+stat unit
+stat unitgraph
+
+// Profile individual passes in the RDG graph
+r.RDG.Debug 1
+```
+
+## Version and Status
+
+- **Version**: 1.0
+- **Plugin Status**: Beta version
+- **Loading Phase**: PostConfigInit (ensures compatibility with rendering system)
+- **Content Support**: Plugin includes content assets (precomputed SMAA textures)
+
+## License
+Copyright Epic Games, Inc. All Rights Reserved.
+
+## Credits
+SMAA algorithm by Jorge Jiménez, Brawley, Reshetov, and Sousa (2011)
+Unreal Engine integration and optimization by GroundZero
 - **RDG (Render Dependency Graph)**: Modern rendering graph integration
 - **Console Variables**: Real-time configuration without recompilation
 
@@ -152,4 +222,4 @@ Copyright Epic Games, Inc. All Rights Reserved.
 
 ## Credits
 SMAA algorithm by Jorge Jiménez, Brawley, Reshetov, and Sousa (2011)
-Unreal Engine integration and optimization by Nikhil Maurya
+Unreal Engine integration and optimization by [Developer Name]

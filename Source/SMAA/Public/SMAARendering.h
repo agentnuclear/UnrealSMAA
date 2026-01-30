@@ -28,6 +28,7 @@ namespace SMAARendering
         FRDGBuilder& GraphBuilder,
         const FViewInfo& View,
         const FScreenPassTexture& SceneColor,
+        const FScreenPassTexture& SceneDepth,
         const FSMAASettings& Settings
     );
 

@@ -79,7 +79,9 @@ static TAutoConsoleVariable<int32> CVarSMAADebugMode(
     TEXT("0: Disabled (default)\n")
     TEXT("1: Show edges\n")
     TEXT("2: Show blend weights\n")
-    TEXT("3: Show final blend overlay\n"),
+    TEXT("3: Show SearchTex\n")
+    TEXT("4: Show AreaTex\n")
+    ,
     ECVF_RenderThreadSafe
 );
 
@@ -102,7 +104,7 @@ FSMAASettings FSMAASettings::GetRuntimeSettings()
     Settings.MaxSearchSteps = FMath::Clamp(CVarSMAAMaxSearchSteps.GetValueOnAnyThread(), 0, 112);
     Settings.bUseCornerDetection = CVarSMAACornerDetection.GetValueOnAnyThread() != 0;
     Settings.bUseDiagonalDetection = CVarSMAADiagonalDetection.GetValueOnAnyThread() != 0;
-    Settings.DebugMode = static_cast<ESMAADebugMode>(FMath::Clamp(CVarSMAADebugMode.GetValueOnAnyThread(), 0, 3));
+    Settings.DebugMode = static_cast<ESMAADebugMode>(FMath::Clamp(CVarSMAADebugMode.GetValueOnAnyThread(), 0, 6));
 
     
     return Settings;

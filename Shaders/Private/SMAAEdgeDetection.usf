@@ -1,13 +1,23 @@
 // SMAAEdgeDetection.usf
 #include "/Engine/Private/Common.ush"
 #include "/Engine/Private/ScreenPass.ush"
+#include "SMAACommon.ush"
 
 Texture2D ColorTexture;
 SamplerState ColorSampler;
+Texture2D DepthTexture; // For future use
+SamplerState DepthSampler;
 
-float2 InvTextureSize;
+float2 InvTextureSize; // (1/w, 1/h)
 float Threshold;
+uint EdgeDetectionMode; // 0=Luma, 1=Color, 2=Depth
 uint DebugMode;
+
+// Calculate Luma
+float GetLuma(float3 Color)
+{
+    return dot(Color, float3(0.299, 0.587, 0.114));
+}
 
 void MainPS(
     noperspective float4 UVAndScreenPos : TEXCOORD0,
@@ -16,46 +26,48 @@ void MainPS(
 )
 {
     float2 UV = UVAndScreenPos.xy;
-
-    // Sample center and neighbors
-    float3 C  = ColorTexture.SampleLevel(ColorSampler, UV, 0).rgb;
-    float3 L  = ColorTexture.SampleLevel(ColorSampler, UV + float2(-InvTextureSize.x, 0), 0).rgb;
-    float3 T  = ColorTexture.SampleLevel(ColorSampler, UV + float2(0, -InvTextureSize.y), 0).rgb;
-    float3 R  = ColorTexture.SampleLevel(ColorSampler, UV + float2(InvTextureSize.x, 0), 0).rgb;
-    float3 B  = ColorTexture.SampleLevel(ColorSampler, UV + float2(0, InvTextureSize.y), 0).rgb;
-
-    // Convert to luma
-    float LC = dot(C, float3(0.299, 0.587, 0.114));
-    float LL = dot(L, float3(0.299, 0.587, 0.114));
-    float LT = dot(T, float3(0.299, 0.587, 0.114));
-    float LR = dot(R, float3(0.299, 0.587, 0.114));
-    float LB = dot(B, float3(0.299, 0.587, 0.114));
-
-    // Detect edges in both directions
-    float EdgeH = max(abs(LC - LL), abs(LC - LR));
-    float EdgeV = max(abs(LC - LT), abs(LC - LB));
-
-    float adaptiveThreshold = Threshold;
-
-    // Boost detection in high-contrast areas
-    float contrast = max(max(abs(LC - LL), abs(LC - LT)), max(abs(LC - LR), abs(LC - LB)));
-    if (contrast > 0.3)
+    
+    // Standard SMAA Edge Detection typically checks Left and Top boundaries of the pixel
+    // We compare Current (C) with Left (L) and Top (T)
+    
+    float3 C = ColorTexture.SampleLevel(ColorSampler, UV, 0).rgb;
+    float3 L = ColorTexture.SampleLevel(ColorSampler, UV + float2(-InvTextureSize.x, 0), 0).rgb;
+    float3 T = ColorTexture.SampleLevel(ColorSampler, UV + float2(0, -InvTextureSize.y), 0).rgb;
+    
+    float2 Delta;
+    
+    if (EdgeDetectionMode == 0) // Luma
     {
-        adaptiveThreshold *= 0.5; // More sensitive in high-contrast areas
+        float LumaC = GetLuma(C);
+        float LumaL = GetLuma(L);
+        float LumaT = GetLuma(T);
+        
+        Delta.x = abs(LumaC - LumaL); // Left edge
+        Delta.y = abs(LumaC - LumaT); // Top edge
     }
-
-    // Threshold to binary edge
-    float H = EdgeH > Threshold ? 1.0 : 0.0;
-    float V = EdgeV > Threshold ? 1.0 : 0.0;
-
-    // DEBUG: visualize edges clearly
+    else // Color (Max difference)
+    {
+        float3 DeltaC = abs(C - L);
+        float3 DeltaT = abs(C - T);
+        
+        Delta.x = max(max(DeltaC.r, DeltaC.g), DeltaC.b);
+        Delta.y = max(max(DeltaT.r, DeltaT.g), DeltaT.b);
+    }
+    
+    // Thresholding
+    float2 Edges = step(Threshold, Delta);
+    
+    // Discard if no edges (optimization)
+    if (dot(Edges, float2(1, 1)) == 0)
+    {
+        discard;
+    }
+    
+    // Output: R=Left Edge, G=Top Edge
+    OutColor = float4(Edges, 0, 0);
+    
     if (DebugMode == 1)
     {
-        // Horizontal = RED, Vertical = GREEN
-        OutColor = float4(H, V, 0, 1);
-        return;
+        OutColor = float4(Edges.x, Edges.y, 0, 1);
     }
-
-    // Normal SMAA edge output (RG)
-    OutColor = float4(H, V, 0, 0);
 }

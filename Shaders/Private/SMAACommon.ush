@@ -1,1 +1,36 @@
-// 
+// SMAACommon.ush
+#pragma once
+
+#include "/Engine/Private/Common.ush"
+
+// Common parameters used across SMAA shaders
+// These should be set in the shader file that includes this, or passed via uniform buffer
+
+// Macros for SMAA
+#define SMAA_THRESHOLD 0.1
+#define SMAA_MAX_SEARCH_STEPS 16
+#define SMAA_AREATEX_MAX_DISTANCE 16
+#define SMAA_AREATEX_PIXEL_SIZE (1.0 / float2(160.0, 560.0))
+#define SMAA_AREATEX_SUBTEX_SIZE (1.0 / 7.0)
+// Update to match the 64x16 packed texture found by the user
+#define SMAA_SEARCHTEX_SIZE float2(66.0, 33.0)
+#define SMAA_SEARCHTEX_PACKED_SIZE float2(64.0, 16.0)
+#define SMAA_CORNER_ROUNDING 25
+#define SMAA_CORNER_ROUNDING_NORM (float(SMAA_CORNER_ROUNDING) / 100.0)
+
+/**
+ * Helper for Conditional Move
+ */
+void SMAAMovc(bool2 cond, inout float2 variable, float2 value)
+{
+    if (cond.x) variable.x = value.x;
+    if (cond.y) variable.y = value.y;
+}
+
+void SMAAMovc(bool4 cond, inout float4 variable, float4 value)
+{
+    if (cond.x) variable.x = value.x;
+    if (cond.y) variable.y = value.y;
+    if (cond.z) variable.z = value.z;
+    if (cond.w) variable.w = value.w;
+}

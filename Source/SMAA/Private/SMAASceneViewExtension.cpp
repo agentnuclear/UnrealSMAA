@@ -58,6 +58,14 @@ FScreenPassTexture SMAASceneViewExtension::PostProcessPassCallback_RenderThread(
     FSMAASettings Settings = FSMAASettings::GetRuntimeSettings();
 
     FScreenPassTexture SceneColor = Inputs.GetInput(EPostProcessMaterialInput::SceneColor);
+    
+    FScreenPassTexture SceneDepth;
+    // Note: SceneDepth access via Inputs.SceneTextures is currently disabled due to compilation issues.
+    // The plugin will fallback to using SceneColor for edge detection (Luma/Color mode).
+    // if (Inputs.SceneTextures)
+    // {
+    //     SceneDepth = FScreenPassTexture((*Inputs.SceneTextures)->SceneDepthTexture, SceneColor.ViewRect);
+    // }
 
     if (!SceneColor.IsValid() || !Settings.bEnabled)
     {
@@ -73,6 +81,7 @@ FScreenPassTexture SMAASceneViewExtension::PostProcessPassCallback_RenderThread(
         GraphBuilder,
         ViewInfo,
         SceneColor,
+        SceneDepth,
         Settings
     );
 

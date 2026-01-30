@@ -36,7 +36,10 @@ enum class ESMAADebugMode : uint32
     None = 0,
     Edges = 1,
     BlendWeights = 2,
-    FinalBlend = 3
+    SearchTexture = 3,
+    AreaTexture = 4,
+    SearchSteps = 5,
+    TextureDimensions = 6
 };
 
 /**
