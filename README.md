@@ -9,6 +9,8 @@ A professional-grade SMAA (Subpixel Morphological Anti-Aliasing) implementation 
 3. Rebuild the project
 4. Enable the plugin in `Edit > Plugins` (search for "SMAA")
 
+[This Plugin is still in development and is not build friendly at the moment]
+
 ## Usage
 
 ### Basic Setup
@@ -43,8 +45,6 @@ r.SMAA.MaxSearchSteps 32
 // Debug visualization: 0=Off, 1=Edges, 2=BlendWeights, 3=FinalBlend
 r.SMAA.DebugMode 0
 
-// Local contrast adaptation
-r.SMAA.LocalContrastAdaptationFactor 2.0
 ```
 
 ## Architecture
@@ -152,4 +152,4 @@ Copyright Epic Games, Inc. All Rights Reserved.
 
 ## Credits
 SMAA algorithm by Jorge Jiménez, Brawley, Reshetov, and Sousa (2011)
-Unreal Engine integration and optimization by [Developer Name]
+Unreal Engine integration and optimization by Nikhil Maurya
