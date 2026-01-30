@@ -9,6 +9,8 @@ A professional-grade SMAA (Subpixel Morphological Anti-Aliasing) implementation 
 3. Rebuild the project
 4. Enable the plugin in `Edit > Plugins` (search for "SMAA")
 
+[This Plugin is still in development and is not build friendly at the moment]
+
 ## Usage
 
 ### Basic Setup
