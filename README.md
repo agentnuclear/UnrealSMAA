@@ -1,7 +1,8 @@
 # SMAA Anti-Aliasing Plugin for Unreal Engine
 
 A professional-grade SMAA (Subpixel Morphological Anti-Aliasing) implementation for Unreal Engine 5, providing high-quality edge anti-aliasing with minimal performance impact.
-[The project is now discontinued as Unreal added a SMAA path in UE5.7]
+
+**[The project is now discontinued as Unreal added a SMAA path in UE5.7]**
 
 ## Installation
 
@@ -225,4 +226,4 @@ Copyright Epic Games, Inc. All Rights Reserved.
 
 ## Credits
 SMAA algorithm by Jorge Jiménez, Brawley, Reshetov, and Sousa (2011)
-Unreal Engine integration and optimization by [Developer Name]
+Unreal Engine integration and optimization by Nikhil Maurya.
